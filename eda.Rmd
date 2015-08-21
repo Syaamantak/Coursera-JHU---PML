@@ -1,0 +1,93 @@
+
+# Exploratory Data Analysis
+
+## Load libraries and data
+
+```{r}
+
+library(dplyr)
+library(e1071)
+
+training <- read.csv("./data/pml-training.csv", stringsAsFactors = FALSE)
+
+
+
+```
+
+```{r}
+
+dim(training)
+str(training)
+summary(training)
+names(training)
+
+tab <- table(training$classe)
+tab
+prop.table(tab)
+
+training$new_window
+sum(training$new_window == "yes")
+which(training$new_window == "yes")[1:2]
+
+first_window <- training[1:24, ]
+second_window <- training[25:52, ]
+
+
+
+```
+
+
+## Explore first window
+
+* Let's check if assumption that summarized data is calucuated per window is correct
+
+
+```{r}
+first_window <- training[1:24, ]
+
+mean(first_window$roll_belt)
+first_window$avg_roll_belt[24]
+
+sd(first_window$roll_belt)
+first_window$stddev_roll_belt[24]
+
+
+max(first_window$roll_belt)
+first_window$max_roll_belt[24]
+
+min(first_window$roll_belt)
+first_window$min_roll_belt[24]
+
+var(first_window$roll_belt)
+first_window$var_roll_belt[24]
+
+kurtosis(first_window$roll_belt, type = 1)
+kurtosis(first_window$roll_belt, type = 2)
+kurtosis(first_window$roll_belt, type = 3)
+first_window$kurtosis_roll_belt[24]
+
+
+```
+
+* Everythingt but the max,  min, and kurtosis values seem to have been calcuated correctly
+* We examine another to check especially max and min again
+
+## Explore second window
+
+```{r}
+
+max(second_window$roll_belt)
+second_window$max_roll_belt[28]
+
+max(second_window$pitch_arm)
+second_window$max_picth_arm[28]
+
+min(second_window$pitch_arm)
+second_window$min_pitch_arm[28]
+
+
+
+```
+
+
+
