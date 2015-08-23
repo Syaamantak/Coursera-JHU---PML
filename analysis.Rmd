@@ -1,12 +1,15 @@
 
-# Exploratory Data Analysis
+# Predicting the quality of weight lifting exercise activity
 
-## Load libraries and data
+
+## Exploratory Data Analysis
+
+### Load libraries and data
 
 ```{r}
 
 library(dplyr)
-library(e1071)
+library(magrittr)
 
 training <- read.csv("./data/pml-training.csv", stringsAsFactors = FALSE)
 testing <- read.csv("./data/pml-testing.csv", stringsAsFactors = FALSE)
@@ -16,33 +19,64 @@ testing <- read.csv("./data/pml-testing.csv", stringsAsFactors = FALSE)
 ```
 
 
-## First rough check of the training set
+### First rough check of the training set
 
 ```{r}
 
 dim(training)
 str(training)
 summary(training)
-names(training)
 
 tab <- table(training$classe)
 tab
 prop.table(tab)
 
-training$new_window
+training$new_window[1:50]
 sum(training$new_window == "yes")
-which(training$new_window == "yes")[1:2]
+length(unique(training$num_window))
 
-training %>% select(user_name, num_window, classe) 
-
-tail(training$classe, 5000)
-
+training %>% select(1:10, max_roll_belt, avg_roll_arm) %>% head(60)
+training %>% select(1:10, max_roll_belt, avg_roll_arm) %>% tail(50)
 
 
-
-
+training %>% select(1:10, max_roll_belt, avg_roll_arm) %>% head(60)
 
 ```
+
+* Strangely, the `new_window` variable suggests that there are 406 windows in total
+* However, checking the `num_window` variable reveals that 858 different window labels exist
+* It seems that several observations belonging to certain windows were simply deleted from the training set
+
+Let's check our assumption by examining the original data set which was used by the authors of the study
+
+__Note__: We downloaded the original data from the study's web page [here](http://groupware.les.inf.puc-rio.br/static/WLE/WearableComputing_weight_lifting_exercises_biceps_curl_variations.csv)._
+
+```{r}
+
+original_data <- read.csv("./data/WearableComputing_weight_lifting_exercises_biceps_curl_variations.csv", stringsAsFactors = FALSE)
+
+dim(original_data)
+dim(training)
+sum(original_data$new_window == "yes")
+length(unique(original_data$num_window))
+
+```
+
+
+* In the original data set the observations are grouped and sorted by `num_window`
+* The number of windows labeled as new window (839) and the number of distinct window numbers (861) is nearly equal
+* 19620 from the original data were deleted from the training set
+* This finding also implies that we deal with a really messy training data set compared to the original data
+* I keep wondering why the JHU professors decided to modify the original data set so heavily. Perhaps it was to show the student how to deal 
+with screwed up data in practice
+
+The original study decided to build the classifier based on 2.5ms windows (page 4) and the respective calculated  summary statistics  (e.g. `max_roll_arm`, `skewness_roll_arm`). The summary statistics rows are indicated by `new_window == 'yes'`.
+
+However, only 406 of those summary statistics rows are present in the training data. More importantly, since 50% of the original data was deleted from the training set, we have no chance to re-calculate the missing summary statistic rows which were part of training the study's classifier. 
+
+Of course, we could simply group the training data by `numb_window` and calculate the missing summary statistics for those observations. But with this amount of missing data we would introduce a lot of bias.
+
+Therefore, we will just use the 406 observations of the training set which include the window summary statistics.
 
 
 ## First rough check of the testing set
@@ -50,7 +84,7 @@ tail(training$classe, 5000)
 ```{r}
 
 dim(testing)
-testing
+testing[1:10, 1:13]
 
 check <- sapply(testing, function(x)all(is.na(x)))
 sum(check)
@@ -63,9 +97,6 @@ training_window_numb <- unique(training$num_window)
 testing_window_numb <- unique(testing$num_window)
 
 which(testing_window_numb %in% training_window_numb)
-
-training %>% filter(num_window == 74)
-
 
 
 
@@ -80,7 +111,7 @@ _Findings (1/2)_
 * More importantly, out of 160 columns 100 are completely NA in the testing set
 * Therefore, we just should take into account columns for building the models based on the training set for which data is also available in the testing set later
 * Again we need to stress the fact that this approach is an exception 
-* Under normal cirumstances you would not build your training set influecend by testing set investigations
+* Under normal circumstances you would not build your training set influenced by testing set investigations
 * Normally,  training/testing sets should show a similar/equal structure
 
 However, let's further investigate the testing set:
@@ -157,125 +188,6 @@ _Results_
 * All testing set observations were predicted correctly which is really no surprise
 * The quality of the  course assignment's setup is really disappointing. A student is able to achieve 100% accuracy on the testing set within the first 20 minutes of the exploratory data analysis
 
-
-
-
-
-
-```{r}
-
-first_window <- training[1:24, ]
-second_window <- training[25:52, ]
-
-```
-
-
-## Explore first window
-
-* Let's check if assumption that summarized data is calucuated per window is correct
-
-
-```{r}
-first_window <- training[1:24, ]
-
-# Checking roll belt
-
-mean(first_window$roll_belt)
-first_window$avg_roll_belt[24]
-
-sd(first_window$roll_belt)
-first_window$stddev_roll_belt[24]
-
-
-max(first_window$roll_belt)
-first_window$max_roll_belt[24]
-
-min(first_window$roll_belt)
-first_window$min_roll_belt[24]
-
-var(first_window$roll_belt)
-first_window$var_roll_belt[24]
-
-kurtosis(first_window$roll_belt, type = 1)
-kurtosis(first_window$roll_belt, type = 2)
-kurtosis(first_window$roll_belt, type = 3)
-first_window$kurtosis_roll_belt[24]
-
-e1071::skewness(first_window$roll_belt, type = 1)
-e1071::skewness(first_window$roll_belt, type = 2)
-e1071::skewness(first_window$roll_belt, type = 3)
-moments::skewness(first_window$roll_belt)
-second_window$skewness_roll_belt
-
-filter(training, skewness_roll_belt != "") %>% select(skewness_roll_belt) %>% head
-filter(training, skewness_roll_belt != "") %>% select(skewness_roll_belt) %>% tail
-filter(training, kurtosis_roll_belt != "") %>% select(kurtosis_roll_belt) %>% head
-filter(training, kurtosis_roll_belt != "") %>% select(kurtosis_roll_belt) %>% tail
-
-# Checking pitch arm
-
-mean(first_window$roll_belt)
-first_window$avg_roll_belt[24]
-
-sd(first_window$roll_belt)
-first_window$stddev_roll_belt[24]
-
-
-max(first_window$roll_belt)
-first_window$max_roll_belt[24]
-
-min(first_window$roll_belt)
-first_window$min_roll_belt[24]
-
-var(first_window$roll_belt)
-first_window$var_roll_belt[24]
-
-kurtosis(first_window$roll_belt, type = 1)
-kurtosis(first_window$roll_belt, type = 2)
-kurtosis(first_window$roll_belt, type = 3)
-first_window$kurtosis_roll_belt[24]
-
-e1071::skewness(first_window$roll_belt, type = 1)
-e1071::skewness(first_window$roll_belt, type = 2)
-e1071::skewness(first_window$roll_belt, type = 3)
-moments::skewness(first_window$roll_belt)
-second_window$skewness_roll_belt
-
-filter(training, skewness_roll_belt != "") %>% select(skewness_roll_belt) %>% head
-filter(training, skewness_roll_belt != "") %>% select(skewness_roll_belt) %>% tail
-filter(training, kurtosis_roll_belt != "") %>% select(kurtosis_roll_belt) %>% head
-filter(training, kurtosis_roll_belt != "") %>% select(kurtosis_roll_belt) %>% tail
-
-
-# Let's check if skewnewss/kurtosis were calculated for each window and then normalized
-
-
-
-
-
-
-```
-
-* Everythingt but the max,  min, and kurtosis values seem to have been calcuated correctly
-* Kurtosis and skewness were calculated for each window and then normilized
-* We examine another to check especially max and min again
-
-## Explore second window
-
-```{r}
-
-max(second_window$roll_belt)
-second_window$max_roll_belt[28]
-
-max(second_window$pitch_arm)
-second_window$max_picth_arm[28]
-
-min(second_window$pitch_arm)
-second_window$min_pitch_arm[28]
-
-
-
-```
 
 
 
