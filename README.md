@@ -4,10 +4,11 @@ This repo includes the results of [Coursera's Practical Machine Learning](https:
 
 It contains the following files:
 
-* `eda.Rmd`: Reflects the walk through of my exploratory data analysis (EDA). It even 
+* `analysis.Rmd`: The first part describes the conducted exploratory data analysis (EDA). The EDA even 
 includes the submission part because surprising facts about the testing set were
-revealed right at the beginning of the EDA
-* `train_build_model.Rmd`: Script to build and train a prediction model and to calculate the estimate of the testing set error based on cross-validation
+revealed right at the beginning. In the second part we build and train a random forest model to calculate the estimate of the testing set error based on cross-validation
+* `/data`: folder contains the training set, the testing set and the study's original data
+* `qualitative_activity_recognition_of_wle.pdf`: Study whose results we try to reproduce in parts
 
 
 
