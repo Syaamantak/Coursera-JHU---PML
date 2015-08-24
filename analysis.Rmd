@@ -1,15 +1,26 @@
 
 # Predicting the quality of weight lifting exercise activity
 
+The analysis is divided into two main sections:
+
+* Exploratory data analysis
+* Train and build model
+
+The EDA section will reveal several major findings: For instance, the course's training set is a reduced version of the study's original data. More importantly, it is not even necessary to build and train a prediction model in order to achieve 100% accuracy on the testing set. Simple EDA techniques and a straightforward look up function are enough to create the correct submission files.
+
+In the second section we will train and build a random forest model. We will cross validate the model in order to report an estimate of the out of sample error. The model will not be used to make the test set predictions because of the major drawbacks in regards to the test set structure revealed during the exploratory analysis. 
+
 
 ## Exploratory Data Analysis
 
 ### Load libraries and data
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 
 library(dplyr)
 library(magrittr)
+library(caret)
+library(doParallel)
 
 training <- read.csv("./data/pml-training.csv", stringsAsFactors = FALSE)
 testing <- read.csv("./data/pml-testing.csv", stringsAsFactors = FALSE)
@@ -24,8 +35,8 @@ testing <- read.csv("./data/pml-testing.csv", stringsAsFactors = FALSE)
 ```{r}
 
 dim(training)
-str(training)
-summary(training)
+#str(training)
+#summary(training)
 
 tab <- table(training$classe)
 tab
@@ -35,13 +46,19 @@ training$new_window[1:50]
 sum(training$new_window == "yes")
 length(unique(training$num_window))
 
+
+
+```
+
+```{r eval=FALSE}
+
 training %>% select(1:10, max_roll_belt, avg_roll_arm) %>% head(60)
 training %>% select(1:10, max_roll_belt, avg_roll_arm) %>% tail(50)
-
-
 training %>% select(1:10, max_roll_belt, avg_roll_arm) %>% head(60)
 
 ```
+
+
 
 * Strangely, the `new_window` variable suggests that there are 406 windows in total
 * However, checking the `num_window` variable reveals that 858 different window labels exist
@@ -49,7 +66,7 @@ training %>% select(1:10, max_roll_belt, avg_roll_arm) %>% head(60)
 
 Let's check our assumption by examining the original data set which was used by the authors of the study
 
-__Note__: We downloaded the original data from the study's web page [here](http://groupware.les.inf.puc-rio.br/static/WLE/WearableComputing_weight_lifting_exercises_biceps_curl_variations.csv)._
+__Note__: We downloaded the original data from the study's web page [here](http://groupware.les.inf.puc-rio.br/static/WLE/WearableComputing_weight_lifting_exercises_biceps_curl_variations.csv).
 
 ```{r}
 
@@ -79,7 +96,7 @@ Of course, we could simply group the training data by `numb_window` and calculat
 Therefore, we will just use the 406 observations of the training set which include the window summary statistics.
 
 
-## First rough check of the testing set
+### First rough check of the testing set
 
 ```{r}
 
@@ -102,7 +119,7 @@ which(testing_window_numb %in% training_window_numb)
 
 ```
 
-_Findings (1/2)_
+__Findings (1/2)__
 
 * Normally, you should build your model based on the training model without taking into account the testing set
 * However, in this particular case we should predict the classes of 20 single observations in the testing set
@@ -140,7 +157,7 @@ training %>% filter(num_window == 439, raw_timestamp_part_1 == 1322673075) %>% s
 ```
 
 
-_Findings (2/2)_
+__Findings (2/2)__
 
 * The findings are worse than expected
 * The 20 observations from the testing set were simply cut out from the training set
@@ -182,11 +199,122 @@ pml_write_files(my_predictions)
 ```
 
 
-_Results_
+### EDA Results
 
 * Submitting the predictions files based on the look-up function's results worked as expected
 * All testing set observations were predicted correctly which is really no surprise
 * The quality of the  course assignment's setup is really disappointing. A student is able to achieve 100% accuracy on the testing set within the first 20 minutes of the exploratory data analysis
+
+
+## Train and build prediction model 
+
+Based on the EDA results it would not be necessary to train and build a prediciton model because we already submitted the test set predictions and achieved 100% accuracy. 
+
+However, since we need to report an estimate for out of sample error based on cross validation, we will train and build a random forest model. A random forest model was also used by the researchers in the original study.
+
+We will build our model in a similar but reduced fashion:
+
+* Like the researchers will use window sizes of 2.5s (see page 4) which means we will restrict ourselves to observations for which `new_window == "yes"`. This will give us the opportunity to leverage the summary statistic columns which would otherwise would be `NA` for most of the observations
+* Summary columns containing `NA` will be omitted completely
+* We will use 10-fold cross validation to report an estimate of the out of sample error
+
+### Pre-process data
+
+```{r}
+
+sub_training <- training %>% 
+  filter(new_window == "yes")
+
+sub_training %<>% select(-c(X, user_name, raw_timestamp_part_1, raw_timestamp_part_2,
+                        cvtd_timestamp, new_window, num_window)) %>%
+  mutate(
+    classe = as.factor(classe)
+  )
+
+sub_training[sub_training == "#DIV/0!"] <- NA
+
+comp_na_columns <- sapply(sub_training, function(x) any(is.na(x))) %>%
+  .[. == TRUE] %>% 
+  names
+
+sub_training %<>% select(-one_of(comp_na_columns))
+
+
+```
+
+
+### Activate all workers for upcoming tuning
+
+```{r}
+
+detectCores()
+getDoParWorkers()
+registerDoParallel(cores = 4)
+
+```
+
+
+### Define resampling schema
+
+```{r}
+
+ctrl <- trainControl(method = 'cv', number = 10)
+
+```
+
+
+### Train random forest model
+
+```{r message=FALSE}
+
+
+grid <- expand.grid(mtry = seq(2, ncol(sub_training), length.out = 5))
+
+rf_fit <- train(classe ~ ., data = sub_training, 
+                method = "rf",
+                tuneGrid = grid,
+                ntree = 1000,
+                trControl = ctrl)
+
+
+```
+
+### Calculate in sample error 
+
+
+
+```{r}
+
+confusionMatrix(predict(rf_fit, newdata = sub_training), sub_training$classe)
+
+```
+
+Our in sample error is simply 0 % because all observations were classified correctly. 
+
+
+### Calculate and report out of sample error estimate
+
+```{r}
+
+rf_fit
+
+```
+
+Having used 10-fold cross validation we achieve our best results regarding accuarcy when setting the `mtry` parameter of the random forest to 31.5: 0.84. 
+
+That means that our estimate for the out of sample error is 16% (1 - 0.84).
+
+This finding is further confirmed by the out-of-bag error rate which is automatically calculated when creating a random forest model. Also the OOB error serves as an estimate for the out of sample error rate. In our case the OOB error rate is 15.27% as shown below:
+
+```{r}
+
+rf_fit$finalModel
+
+```
+
+
+
+
 
 
 
