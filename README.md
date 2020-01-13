@@ -1,4 +1,4 @@
-# Coursera-JHU---PML
+# Coursera - Johns Hopkins University - Practical Machine Learning Course
 Practical-Machine-Learning
 Course offered by Johns Hopkins University through Coursera
 
